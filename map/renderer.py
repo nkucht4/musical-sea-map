@@ -9,10 +9,9 @@ TILE_SIZE = 5
 NOISE_SCALE = 0.055
 
 BIOME_COLORS = {
-    "shallows": (83, 181, 210),
-    "open_water": (45, 139, 190),
-    "deep_water": (25, 87, 150),
-    "abyss": (12, 42, 91),
+    "polar": (64, 57, 198),
+    "tropical": (42, 196, 213),
+    "temperate": (28, 131, 227)
 }
 
 
@@ -21,33 +20,51 @@ class Tile:
     biome: str
     color: tuple[int, int, int]
     properties: dict[str, object]
+    depth: int
 
 
 def _build_map() -> list[list[Tile]]:
     randomizer = random.Random(7)
-    biomes = ("shallows", "open_water", "deep_water", "abyss")
-    tiles = []
-
+    biomes = ("polar", "temperate", "tropical")
+    
+    tile_data = []
     for y in range(GRID_SIZE[1]):
-        row = []
         for x in range(GRID_SIZE[0]):
             noise = _fractal_noise(x * NOISE_SCALE, y * NOISE_SCALE)
-            biome = biomes[min(int(noise * len(biomes)), len(biomes) - 1)]
-            row.append(
-                Tile(
-                    biome=biome,
-                    color=BIOME_COLORS[biome],
-                    properties={
-                        "position": (x, y),
-                        "depth": (biomes.index(biome) + 1) * 100,
-                        "noise": round(noise, 3),
-                        "current": randomizer.choice(("north", "east", "south", "west")),
-                    },
-                )
-            )
-        tiles.append(row)
+            tile_data.append((noise, x, y))
+            
+    tile_data.sort(key=lambda item: item[0])
+    total_tiles = len(tile_data)
 
-    return tiles
+    grid_tiles = [[None for _ in range(GRID_SIZE[0])] for _ in range(GRID_SIZE[1])]
+    
+    for i, (noise, x, y) in enumerate(tile_data):
+        if i < total_tiles // 3:
+            biome = biomes[0]
+        elif i < (total_tiles * 2) // 3:
+            biome = biomes[1]
+        else:
+            biome = biomes[2]
+            
+        depth = int((i / (total_tiles - 1)) * 4000) if total_tiles > 1 else 0
+        
+        base_color = BIOME_COLORS[biome]
+        depth_factor = 1.0 - (depth / 8000)
+        color = tuple(max(0, min(255, int(c * depth_factor))) for c in base_color)
+        
+        grid_tiles[y][x] = Tile(
+            biome=biome,
+            color=color,
+            properties={
+                "position": (x, y),
+                "depth": depth,
+                "noise": round(noise, 3),
+                "current": randomizer.choice(("north", "east", "south", "west")),
+            },
+            depth=depth
+        )
+
+    return grid_tiles
 
 
 def _fade(value: float) -> float:
@@ -92,13 +109,11 @@ def draw_tile(surface: pygame.Surface, x: int, y: int, tile: Tile) -> None:
     rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
     pygame.draw.rect(surface, tile.color, rect)
 
-
 def render() -> None:
     surface = pygame.display.get_surface()
     if surface is None:
         return
-
-    surface.fill(BIOME_COLORS["abyss"])
+    surface.fill((0,0,0))
     map_width = GRID_SIZE[0] * TILE_SIZE
     map_height = GRID_SIZE[1] * TILE_SIZE
     offset_x = (surface.get_width() - map_width) // 2
